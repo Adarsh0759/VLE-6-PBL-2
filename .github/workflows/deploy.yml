@@ -64,6 +64,7 @@ jobs:
       # 7. Connect to EC2 and deploy
      
      
+      
       - name: Deploy to Kubernetes
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -72,24 +73,21 @@ jobs:
         run: |
           set -euxo pipefail
 
-          echo "Checking EC2 host..."
+          echo "STEP 1: Checking SSH configuration"
           test -n "$EC2_HOST"
           test -n "$EC2_USER"
 
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-
-          echo "Testing SSH port..."
+          echo "STEP 2: Testing port 22"
           timeout 10 bash -c "echo > /dev/tcp/$EC2_HOST/22"
 
-          echo "Collecting SSH host key..."
+          echo "STEP 3: Collecting host key"
           ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-          echo "Testing SSH authentication..."
-          ssh -v -o BatchMode=yes -o ConnectTimeout=15 \
+          echo "STEP 4: Testing SSH login"
+          ssh -o BatchMode=yes -o ConnectTimeout=15 \
             "$EC2_USER@$EC2_HOST" "echo SSH_CONNECTED"
 
-          echo "Deploying images..."
+          echo "STEP 5: Deploying Kubernetes images"
           ssh "$EC2_USER@$EC2_HOST" "
             sudo k3s kubectl set image deployment/ecommerce-backend ecommerce-backend=adarshinfinia/ecommerce-backend:$IMAGE_TAG -n ecommerce &&
             sudo k3s kubectl set image deployment/ecommerce-frontend ecommerce-frontend=adarshinfinia/ecommerce-frontend:$IMAGE_TAG -n ecommerce &&
