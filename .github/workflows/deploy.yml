@@ -63,6 +63,7 @@ jobs:
 
       # 7. Connect to EC2 and deploy
      
+     
       - name: Deploy to Kubernetes
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
@@ -71,18 +72,28 @@ jobs:
         run: |
           set -euxo pipefail
 
+          echo "Checking EC2 host..."
+          test -n "$EC2_HOST"
+          test -n "$EC2_USER"
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
 
-          echo "Testing EC2 SSH connectivity..."
+          echo "Testing SSH port..."
+          timeout 10 bash -c "echo > /dev/tcp/$EC2_HOST/22"
+
+          echo "Collecting SSH host key..."
           ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-          echo "Connecting to EC2..."
-          ssh -o BatchMode=yes -o ConnectTimeout=15 "$EC2_USER@$EC2_HOST" \
-            "echo 'SSH connection successful' && \
-             sudo k3s kubectl get nodes && \
-             sudo k3s kubectl set image deployment/ecommerce-backend ecommerce-backend=adarshinfinia/ecommerce-backend:$IMAGE_TAG -n ecommerce && \
-             sudo k3s kubectl set image deployment/ecommerce-frontend ecommerce-frontend=adarshinfinia/ecommerce-frontend:$IMAGE_TAG -n ecommerce && \
-             sudo k3s kubectl rollout status deployment/ecommerce-backend -n ecommerce --timeout=180s && \
-             sudo k3s kubectl rollout status deployment/ecommerce-frontend -n ecommerce --timeout=180s"
+          echo "Testing SSH authentication..."
+          ssh -v -o BatchMode=yes -o ConnectTimeout=15 \
+            "$EC2_USER@$EC2_HOST" "echo SSH_CONNECTED"
+
+          echo "Deploying images..."
+          ssh "$EC2_USER@$EC2_HOST" "
+            sudo k3s kubectl set image deployment/ecommerce-backend ecommerce-backend=adarshinfinia/ecommerce-backend:$IMAGE_TAG -n ecommerce &&
+            sudo k3s kubectl set image deployment/ecommerce-frontend ecommerce-frontend=adarshinfinia/ecommerce-frontend:$IMAGE_TAG -n ecommerce &&
+            sudo k3s kubectl rollout status deployment/ecommerce-backend -n ecommerce --timeout=180s &&
+            sudo k3s kubectl rollout status deployment/ecommerce-frontend -n ecommerce --timeout=180s
+          "
 
