@@ -62,19 +62,27 @@ jobs:
           ssh-private-key: ${{ secrets.EC2_SSH_KEY }}
 
       # 7. Connect to EC2 and deploy
+     
       - name: Deploy to Kubernetes
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_USER: ${{ secrets.EC2_USER }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          set -euxo pipefail
+
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-          ssh "$EC2_USER@$EC2_HOST" "
-            sudo k3s kubectl set image deployment/ecommerce-backend ecommerce-backend=adarshinfinia/ecommerce-backend:$IMAGE_TAG -n ecommerce &&
-            sudo k3s kubectl set image deployment/ecommerce-frontend ecommerce-frontend=adarshinfinia/ecommerce-frontend:$IMAGE_TAG -n ecommerce &&
-            sudo k3s kubectl rollout status deployment/ecommerce-backend -n ecommerce --timeout=180s &&
-            sudo k3s kubectl rollout status deployment/ecommerce-frontend -n ecommerce --timeout=180s
-          "
+          echo "Testing EC2 SSH connectivity..."
+          ssh-keyscan -T 10 -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+          echo "Connecting to EC2..."
+          ssh -o BatchMode=yes -o ConnectTimeout=15 "$EC2_USER@$EC2_HOST" \
+            "echo 'SSH connection successful' && \
+             sudo k3s kubectl get nodes && \
+             sudo k3s kubectl set image deployment/ecommerce-backend ecommerce-backend=adarshinfinia/ecommerce-backend:$IMAGE_TAG -n ecommerce && \
+             sudo k3s kubectl set image deployment/ecommerce-frontend ecommerce-frontend=adarshinfinia/ecommerce-frontend:$IMAGE_TAG -n ecommerce && \
+             sudo k3s kubectl rollout status deployment/ecommerce-backend -n ecommerce --timeout=180s && \
+             sudo k3s kubectl rollout status deployment/ecommerce-frontend -n ecommerce --timeout=180s"
+
